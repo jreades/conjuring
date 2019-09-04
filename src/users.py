@@ -21,63 +21,67 @@ import argparse
 header = ['Username','Password']
 password_chars = list(string.ascii_letters) + list(string.digits) + ['_',':',';','(',')']
 
-def create_users_csv(args): 
+def create_users_csv(num=25, usernm='conjuring', pwdlen=8, unsafe_pwd=False, 
+                     create_admin=True, admin_user='admin', admin_len='18', 
+                     append=False, dest='users.csv'): 
     print("Generating usernames and passwords for use by Conjuring container and JupyterHub...")
 
     # Figure we should reinforce this choice for the user (in case the param name wasn't enough).
-    if args.unsafe_pwd is not None:
-        print("\tDefaulting to unsafe passwords based on '{0}' + user number".format(args.unsafe_pwd))
+    if unsafe_pwd is not None:
+        print("\tDefaulting to unsafe passwords based on '{0}' + user number".format(unsafe_pwd))
 
     # If we are appending then we need to see where we stopped creating users so that we can 
     # initialise our starting point as the maximum + 1 of the _previous_ list of user numbers.
     start_pt = 1
     write_md = 'w'
-    if args.append is True:
-        # Read in the file 
-        with open(args.users, 'r') as csvfile:
-            pwd = csv.reader(csvfile, delimiter=',')
-            
-            # We're going to try to extract the _last_ username if there's
-            # no admin user, or the _second to last_ username if there is an
-            # admin user. Note that this assumes you're aren't changing the 
-            # settings after running the users script for the first time!
-            try: 
-                last_user = list(pwd)[(-2 if args.create_admin is True else -1)][0] # Ternary operator to switch between -1 and -2 from users list
-                start_pt  = int(last_user.replace(args.usernm,''))+1 # Assume user name template can't change so to just remove the template and take what's left (should be an int)
-                write_md = 'a' # Change the write mode to append
-                args.create_admin = False # Don't re-create the admin user
-            except IndexError:
-                # Suggests that the file exists but is empty/uninitialised, so pass without setting write mode.
-                # You could also get other errors from the above section, but they would suggest that 
-                # user has changed the configuration parameters _after_ initialising the container
-                # which is something we don't want to deal with.
-                pass 
+    if append is True:
+        # Check if file exists 
+        if os.path.exists(dest) and os.path.isfile(dest):
+            # Read in the file 
+            with open(dest, 'r') as csvfile:
+                pwd = csv.reader(csvfile, delimiter=',')
+                
+                # We're going to try to extract the _last_ username if there's
+                # no admin user, or the _second to last_ username if there is an
+                # admin user. Note that this assumes you're aren't changing the 
+                # settings after running the users script for the first time!
+                try: 
+                    last_user = list(pwd)[(-2 if create_admin is True else -1)][0] # Ternary operator to switch between -1 and -2 from users list
+                    start_pt  = int(last_user.replace(usernm,''))+1 # Assume user name template can't change so to just remove the template and take what's left (should be an int)
+                    write_md = 'a' # Change the write mode to append
+                    create_admin = False # Don't re-create the admin user
+                except IndexError:
+                    # Suggests that the file exists but is empty/uninitialised, so pass without setting write mode.
+                    # You could also get other errors from the above section, but they would suggest that 
+                    # user has changed the configuration parameters _after_ initialising the container
+                    # which is something we don't want to deal with.
+                    pass 
 
     # And write the CSV file
-    with open(args.users, write_md, newline='') as csvfile:
+    with open(dest, write_md, newline='') as csvfile:
         pwd = csv.writer(csvfile, delimiter=',', quoting=csv.QUOTE_MINIMAL)
         
         # Only write header row if _not_ appending.
-        if args.append is False: 
+        if append is False or write_md is not 'a': 
             pwd.writerow(header)
 
         # Create new users from starting point (can be 1 for new file or the last
         # non-admin user created if appending to file)
-        for i in range(start_pt,start_pt+args.num):
+        for i in range(start_pt,start_pt+num):
 
             # Generate password according to specified user policy.
-            if args.unsafe_pwd is not None:
-                pwd.writerow([args.usernm + str(i), args.unsafe_pwd + str(i)])
+            if unsafe_pwd is not None:
+                pwd.writerow([usernm + str(i), unsafe_pwd + str(i)])
             else:
-                pwd.writerow([args.usernm + str(i), ''.join(secrets.choice(password_chars) for i in range(args.pwdlen))])
-        print("\tCreated username and password for " + ('' if args.append is False else 'another ') + str(args.num) + " users.")
+                pwd.writerow([usernm + str(i), ''.join(secrets.choice(password_chars) for i in range(pwdlen))])
+        print("\tCreated username and password for " + ('' if append is False else 'another ') + str(num) + " users.")
 
         # Create admin user. This can be set to False above if script detects that 
         # file already exists so that user doesn't accidentally re-create the
         # admin user later.
-        if args.create_admin is True and args.append is not True:
-            pwd.writerow([args.admin_user, ''.join(secrets.choice(password_chars) for i in range(args.admin_len))])
-            print("\tCreated admin username (" + args.admin_user + ") and password.")
+        if create_admin is True and not (append is True and write_md is 'a'):
+            pwd.writerow([admin_user, ''.join(secrets.choice(password_chars) for i in range(admin_len))])
+            print("\tCreated admin username (" + admin_user + ") and password.")
 
 if __name__ == '__main__':
 
@@ -97,10 +101,12 @@ if __name__ == '__main__':
     parser.add_argument('--admin_user', type=str, default="admin", help='Name of admin user if not \'admin\' (optional)')
     parser.add_argument('--admin_len', type=int, default=12, help='Length of admin user password (defaults to 12 for security reasons).')
     parser.add_argument('--append', type=bool, default=False, help='If we have already created users but need to add some more then we don\'t want to blow away the existing users.')
-    parser.add_argument('--users', type=str, default='users.csv', help='Path to append/write out as CSV. Defaults to users.csv')
+    parser.add_argument('--dest', type=str, default='users.csv', help='Path to append/write out as CSV. Defaults to users.csv')
 
     args=parser.parse_args()
 
-    create_users_csv(args)
+    create_users_csv(args.num, args.usernm, args.pwdlen, args.unsafe_pwd, 
+                     args.create_admin, args.admin_user, args.admin_len, 
+                     args.append, args.dest)
 
     exit()
