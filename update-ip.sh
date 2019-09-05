@@ -14,5 +14,5 @@ printf "<html><title>Current NUC IP Addresses</title><body>\n" > tmp.html
 printf "<h3>$IP_ADDR</h3>\n<h3>Last Updated: $DATE</h3>"$'\n' >> tmp.html
 printf "</body></html>" >> tmp.html
 
-#scp tmp.html conjuring@reades.com:public_html/index.html
+scp tmp.html conjuring@reades.com:public_html/index.html
 
